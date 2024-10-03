@@ -41,6 +41,80 @@ def record_points(evt: gr.SelectData):
 
 # 执行仿射变换
 
+def RBF(r, sigma):
+    return np.exp(-(r*r)/(sigma**2))
+
+def warp_RBF(image, sources_pts, wx, wy, sigma):
+    # image warping by RBF
+    n = sources_pts.shape[0]
+    h = image.shape[0]
+    w = image.shape[1]
+
+    warped_image = np.zeros([h,w,3])
+    M_Affine = np.array([wx[n:n+3,0], wy[n:n+3,0]]).T
+    pts = np.array([[[1,i,j] for i in range(h)] for j in range(w)]).reshape([h*w,3])
+    pts_affined = np.dot(pts, M_Affine) # shape (h*w, 2)
+    
+    pts_src = np.array([[[i,j] for i in range(h)] for j in range(w)]).reshape([h*w,2])
+    r_ijk = pts_src.reshape([h*w, 1, 2]) - sources_pts.reshape([1, n, 2]) # shape (h*w, n, 2)
+    r2_ijk = (r_ijk*r_ijk).sum(axis=2) # (h*w, n)
+    rbf_ijk = RBF(np.sqrt(r2_ijk), sigma) # (h*w, n)
+    w_ = np.concatenate((wx[0:n], wy[0:n]),axis=1)#.reshape([n, 2])
+    pts_rbf = np.dot(rbf_ijk, w_) # (h*w, 2)
+
+#    filled = np.zeros([h, w])
+#    pts_dst = np.round(pts_affined + pts_rbf) # (h*w, 2)
+#    pts_src_dst = np.concatenate((pts_src, pts_dst), axis=1) # (h*w, 4)
+#    pts_src_dst = pts_src_dst.astype(np.uint)
+
+#    x = pts_src_dst[:, 0]
+#    y = pts_src_dst[:, 1]
+#    u = pts_src_dst[:, 2]
+#    v = pts_src_dst[:, 3]
+#    valid_mask = (u >= 0) & (u < h) & (v >= 0) & (v < w)
+
+#    valid_u = u[valid_mask]
+#    valid_v = v[valid_mask]
+#    valid_x = x[valid_mask]
+#    valid_y = y[valid_mask]
+
+#    warped_image[valid_u, valid_v] = image[valid_x, valid_y]
+#    filled[valid_u, valid_v] = 1
+
+    # resampling
+#    warped_image = fill_img(warped_image, filled)
+
+    # remap
+    pts_dst = np.float32(pts_affined + pts_rbf).reshape([w,h,2]) # (h*w, 2)
+    warped_image = cv2.remap(image, pts_dst[:,:,0], pts_dst[:,:,1], cv2.INTER_LINEAR)
+
+    return warped_image.astype(np.uint8)
+
+def fill_img(image, filled):
+    # 使用 NumPy 切片获取形状
+    image_filled = image.copy()  # 创建图像副本
+    h, w = filled.shape
+    
+    # 创建掩码
+    mask = (filled[1:h, 1:w] == 0)
+    
+    # 获取需要填充的坐标
+    i_indices, j_indices = np.indices(mask.shape)
+    
+    # 计算填充像素值
+    image_filled[1:h, 1:w][mask] = np.round(
+        (image[0:h-1, 1:w][mask] / 2) + (image[1:h, 0:w-1][mask] / 2)
+    )
+    
+    return image_filled
+
+def fix_axis(coords):
+    n = coords.shape[0]
+    c = np.zeros([n,2])
+    c[:,0] = coords[:,1]
+    c[:,1] = coords[:,0]
+    return c
+
 def point_guided_deformation(image, source_pts, target_pts, alpha=1.0, eps=1e-8):
     """ 
     Return
@@ -51,6 +125,58 @@ def point_guided_deformation(image, source_pts, target_pts, alpha=1.0, eps=1e-8)
     warped_image = np.array(image)
     ### FILL: 基于MLS or RBF 实现 image warping
 
+    n = source_pts.shape[0]
+    image = np.array(image)
+    tmp = target_pts
+    target_pts = source_pts
+    source_pts = tmp
+    # source_pts, target_pts: n*2 arrays
+    #source_pts = fix_axis(source_pts)
+    #target_pts = fix_axis(target_pts)
+
+    # 基于 RBF: Gaussian
+    M = np.zeros([n+3, n+3])
+    # G = (g||x_i-x_j||)_ij
+    R = np.zeros([n,n])
+    for i in range(n):
+        for j in range(n):
+            r2_ij = (source_pts[i,0]-source_pts[j,0])**2 \
+                + (source_pts[i,1]-source_pts[j,1])**2
+            R[i][j] = np.sqrt(r2_ij)
+    sigma = (float(image.shape[0]+image.shape[1])) / 12
+    print(image.shape)
+    print("sigma = ", end='')
+    print(sigma)
+    G = RBF(R, sigma)
+    print(G)
+
+    M[0:n, 0:n] = G
+
+    # Ve = [[1, x_j, y_j],...]
+    Ve = np.zeros([3, n])
+    Ve[0, :] = np.ones([1, n])
+    Ve[1, :] = source_pts[:, 0]
+    Ve[2, :] = source_pts[:, 1]
+
+    M[0:n, n:n+3] = Ve.T
+    M[n:n+3, 0:n] = Ve
+    print("M =")
+    print(M)
+
+    # U, V
+    U = np.zeros([n+3, 1])
+    V = np.zeros([n+3, 1])
+    U[0:n, 0] = target_pts[:, 0]
+    V[0:n, 0] = target_pts[:, 1]
+
+    X = np.linalg.solve(M, U)
+    Y = np.linalg.solve(M, V)
+    print("X=")
+    print(X.T)
+    print("Y=")
+    print(Y.T)
+
+    warped_image = warp_RBF(image, source_pts, X, Y, sigma)
     return warped_image
 
 def run_warping():
