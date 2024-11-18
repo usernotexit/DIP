@@ -1,7 +1,8 @@
 import gradio as gr
-from PIL import ImageDraw
+from PIL import Image, ImageDraw
 import numpy as np
 import torch
+import torch.nn.functional as F
 
 # Initialize the polygon state
 def initialize_polygon():
@@ -110,6 +111,10 @@ def create_mask_from_points(points, img_h, img_w):
     ### 0 indicates outside the Polygon.
     ### 255 indicates inside the Polygon.
 
+    mask = Image.new('L', (img_w, img_h), 0)
+    ImageDraw.Draw(mask).polygon(tuple(map(tuple, points)), outline=255, fill=255)
+    mask = np.array(mask)
+
     return mask
 
 # Calculate the Laplacian loss between the foreground and blended image
@@ -129,6 +134,27 @@ def cal_laplacian_loss(foreground_img, foreground_mask, blended_img, background_
     loss = torch.tensor(0.0, device=foreground_img.device)
     ### FILL: Compute Laplacian Loss with https://pytorch.org/docs/stable/generated/torch.nn.functional.conv2d.html.
     ### Note: The loss is computed within the masks.
+    # Create Laplacian kernel
+    laplacian_kernel = torch.tensor([[0., 1., 0.], [1., -4., 1.], [0., 1., 0.]], \
+        device=foreground_img.device).expand([3,1,-1,-1])#unsqueeze(0).unsqueeze(0).expand(3, -1, -1, -1)
+
+    #foreground_img = foreground_img.squeeze(0).unsqueeze(1) #[3,1,h,w]
+    #blended_img = blended_img.squeeze(0).unsqueeze(1)
+    # Compute Laplacian of the foreground and blended images
+    laplacian_foreground = F.conv2d(foreground_img, laplacian_kernel, padding=1, groups=3).squeeze(0)
+    laplacian_blended = F.conv2d(blended_img, laplacian_kernel, padding=1, groups=3).squeeze(0)
+    #print(laplacian_foreground.shape)
+
+    # Compute Laplacian loss within the masks
+    fg_indices = torch.nonzero(foreground_mask.squeeze(0).squeeze(0))
+    bg_indices = torch.nonzero(background_mask.squeeze(0).squeeze(0))
+    #print(fg_indices.shape)
+    #print(bg_indices.shape)
+    #print((laplacian_foreground * foreground_mask).shape)
+    laplacian_foreground_masked = (laplacian_foreground * foreground_mask).squeeze(0)[:, fg_indices[:,0], fg_indices[:,1]]
+    laplacian_blended_masked = (laplacian_blended * background_mask).squeeze(0)[:, bg_indices[:,0], bg_indices[:,1]]
+    loss = torch.sum((laplacian_foreground_masked - laplacian_blended_masked) ** 2)\
+        / torch.sum(foreground_mask)
 
     return loss
 
