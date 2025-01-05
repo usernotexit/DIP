@@ -1,1 +1,7 @@
 model.py
+
+__pycache__/
+facades/
+train_results/
+
+remote/
