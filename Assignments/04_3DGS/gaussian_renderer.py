@@ -34,7 +34,7 @@ class GaussianRenderer(nn.Module):
         N = means3D.shape[0]
         
         # 1. Transform points to camera space
-        cam_points = means3D @ R.T + t.unsqueeze(0) # (N, 3)
+        cam_points = means3D @ R.T + t.unsqueeze(0)  # (N, 3)
         
         # 2. Get depths before projection for proper sorting and clipping
         depths = cam_points[:, 2].clamp(min=1.)  # (N, )
@@ -58,8 +58,8 @@ class GaussianRenderer(nn.Module):
         # Transform covariance to camera space
         ### FILL: Aplly world to camera rotation to the 3d covariance matrix
         ### covs_cam = ...  # (N, 3, 3)
-        covs_cam = R @ covs3d @ R.mT  # (N, 3, 3)
-
+        covs_cam = R @ covs3d @ R.T  # (N, 3, 3)
+        
         # Project to 2D
         covs2D = torch.bmm(J_proj, torch.bmm(covs_cam, J_proj.permute(0, 2, 1)))  # (N, 2, 2)
         
@@ -92,6 +92,7 @@ class GaussianRenderer(nn.Module):
         
         # Compute gaussian values
         gaussian = torch.exp(exponent) / (2 * np.pi * torch.sqrt(det)).unsqueeze(-1).unsqueeze(-1)  # (N, H, W)
+        assert(torch.all(gaussian)>=0 and torch.all(gaussian)<=1)
     
         return gaussian
 
@@ -117,7 +118,7 @@ class GaussianRenderer(nn.Module):
         indices = torch.argsort(depths, dim=0, descending=False)  # (N, )
         means2D = means2D[indices]      # (N, 2)
         covs2D = covs2D[indices]       # (N, 2, 2)
-        colors = colors[ indices]       # (N, 3)
+        colors = colors[indices]       # (N, 3)
         opacities = opacities[indices] # (N, 1)
         valid_mask = valid_mask[indices] # (N,)
         
@@ -135,11 +136,18 @@ class GaussianRenderer(nn.Module):
         # 7. Compute weights
         ### FILL:
         ### weights = ... # (N, H, W)
-        T = torch.cumprod(1 - alphas, dim=0)  # (N, H, W)
+        T = torch.cumprod(1-alphas, dim=0) # (N, H, W)
         T = torch.cat([torch.ones(1, self.H, self.W, device=alphas.device), T[:-1]], dim=0)
         weights = alphas * T  # (N, H, W)
+        assert(torch.all(opacities>=0) and torch.all(opacities)<=1)
+        assert(torch.all(valid_mask)>=0 and torch.all(valid_mask)<=1)
+        
+        #assert(torch.all(T<=1))
+        #assert(torch.all(weights.sum(dim=0)<=1))
         
         # 8. Final rendering
         rendered = (weights.unsqueeze(-1) * colors).sum(dim=0)  # (H, W, 3)
         
+        assert(torch.all(abs(colors)<255))
+        assert(torch.all(rendered<1e5))
         return rendered
