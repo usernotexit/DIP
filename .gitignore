@@ -5,3 +5,6 @@ facades/
 train_results/
 
 remote/
+
+# DIP 4
+projections/

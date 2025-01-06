@@ -48,11 +48,18 @@ class GaussianRenderer(nn.Module):
         J_proj = torch.zeros((N, 2, 3), device=means3D.device)
         ### FILL:
         ### J_proj = ...
-        
+        fx, fy = K[0, 0], K[1, 1]
+        z = screen_points[:, 2:3]  # (N, 1)
+        J_proj[:, 0, 0] = fx / z.squeeze()
+        J_proj[:, 1, 1] = fy / z.squeeze()
+        J_proj[:, 0, 2] = -fx * screen_points[:, 0] / (z.squeeze() * z.squeeze())
+        J_proj[:, 1, 2] = -fy * screen_points[:, 1] / (z.squeeze() * z.squeeze())
+
         # Transform covariance to camera space
         ### FILL: Aplly world to camera rotation to the 3d covariance matrix
         ### covs_cam = ...  # (N, 3, 3)
-        
+        covs_cam = R @ covs3d @ R.mT  # (N, 3, 3)
+
         # Project to 2D
         covs2D = torch.bmm(J_proj, torch.bmm(covs_cam, J_proj.permute(0, 2, 1)))  # (N, 2, 2)
         
@@ -77,6 +84,14 @@ class GaussianRenderer(nn.Module):
         # Compute determinant for normalization
         ### FILL: compute the gaussian values
         ### gaussian = ... ## (N, H, W)
+        det = torch.det(covs2D)  # (N,)
+        inv_covs2D = torch.inverse(covs2D)  # (N, 2, 2)
+        
+        # Compute exponent term
+        exponent = -0.5 * torch.einsum('nijk,nkl,nijl->nij', dx, inv_covs2D, dx)
+        
+        # Compute gaussian values
+        gaussian = torch.exp(exponent) / (2 * np.pi * torch.sqrt(det)).unsqueeze(-1).unsqueeze(-1)  # (N, H, W)
     
         return gaussian
 
@@ -120,6 +135,9 @@ class GaussianRenderer(nn.Module):
         # 7. Compute weights
         ### FILL:
         ### weights = ... # (N, H, W)
+        T = torch.cumprod(1 - alphas, dim=0)  # (N, H, W)
+        T = torch.cat([torch.ones(1, self.H, self.W, device=alphas.device), T[:-1]], dim=0)
+        weights = alphas * T  # (N, H, W)
         
         # 8. Final rendering
         rendered = (weights.unsqueeze(-1) * colors).sum(dim=0)  # (H, W, 3)

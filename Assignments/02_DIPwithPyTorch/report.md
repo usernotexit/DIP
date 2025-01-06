@@ -7,5 +7,5 @@
 
 ## 用 PyTorch 实现基于深度学习的图像处理任务
 - 基于全卷积网络的图像转换
-    - 图像分割 [Pix2pix](Pix2pix_FCN.md)
+    - 图像分割 [Pix2pix](Pix2pix/Pix2pix_FCN.md)
     - 图像生成

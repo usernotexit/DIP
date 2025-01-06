@@ -257,6 +257,8 @@ def parse_args():
                       help='Directory to save checkpoints')
     parser.add_argument('--resume', type=str, default=None,
                       help='Path to checkpoint to resume from')
+    parser.add_argument('--outputs', type=str, default='/output',
+                        help='output floder')
     
     # Training parameters
     parser.add_argument('--num_epochs', type=int, default=200,
@@ -294,8 +296,8 @@ def main():
         batch_size=args.batch_size,
         learning_rate=args.learning_rate,
         grad_clip=args.grad_clip,
-        checkpoint_dir=args.checkpoint_dir,
-        log_dir=os.path.join(args.checkpoint_dir, "debug_images"),
+        checkpoint_dir=args.outputs + '/' + args.checkpoint_dir,
+        log_dir=os.path.join(args.outputs, args.checkpoint_dir, "debug_images"),
         debug_every=args.debug_every,
         debug_samples=args.debug_samples
     )
