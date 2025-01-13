@@ -42,7 +42,7 @@ python run_Pix2pix_gradio.py --model-file model/final_model.pth
 
 ## Results
 
-训练 200 epoch 后，在验证集上的损失如下：（待完善）
+训练 200 epoch 后，在验证集上的损失如下：
 
 | Model name         | Train Loss  | Val Loss |
 | ------------------ |---------------- | -------------- |
