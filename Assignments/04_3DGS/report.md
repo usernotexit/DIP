@@ -15,10 +15,8 @@ pip install -r requirements.txt
 
 ## Training
 
-To Be Done：代码整理中
-
 ``` train
-python train.py --colmap_dir /data/chair --outputs <output-folder> --num_epochs 100 --batch_size 1 --debug_every 10 --debug_samples 10
+python train.py --colmap_dir /data/chair --outputs <output-folder> --num_epochs 100 --batch_size 1 --debug_every 10 --debug_samples 1
 ```
 
 >📋 各参数含义
@@ -31,4 +29,21 @@ python train.py --colmap_dir /data/chair --outputs <output-folder> --num_epochs 
 [gaussian_model](gaussian_model.py)和[gaussian_renderer](gaussian_renderer.py)的代码已补全。
 但在训练时出现 loss=nan 的情况，正在排查中
 
+> 2025-01-13: 修改代码，完成
+
 ## Results
+
+- 训练结果如下：分别为 `epoch` 为 $0,20,50,100$ 时的图像
+<center class='half'>
+<img src='figures/r_32_e000.png' width=70%>
+<img src='figures/r_32_e020.png' width=70%>
+<img src='figures/r_32_e050.png' width=70%>
+<img src='figures/r_32_e100.png' width=70%>
+</center>
+
+<center class='half'>
+<img src='figures/r_83_e000.png' width=70%>
+<img src='figures/r_83_e020.png' width=70%>
+<img src='figures/r_83_e050.png' width=70%>
+<img src='figures/r_83_e100.png' width=70%>
+</center>

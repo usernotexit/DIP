@@ -4,6 +4,7 @@ import os
 import torch
 from torch.utils.data import Dataset
 from natsort import natsorted
+from pytorch3d.ops import sample_farthest_points
 
 
 def qvec2rotmat(qvec):
@@ -18,7 +19,6 @@ def qvec2rotmat(qvec):
         [2 * qvec[3] * qvec[1] - 2 * qvec[0] * qvec[2],
          2 * qvec[2] * qvec[3] + 2 * qvec[0] * qvec[1],
          1 - 2 * qvec[1]**2 - 2 * qvec[2]**2]])
-
 
 def read_points3D_text(path):
     """Read points3D.txt file"""
@@ -39,13 +39,12 @@ def read_points3D_text(path):
             }
     return points3D
 
-
 def read_images_text(path):
     """Read images.txt file and return images sorted by name"""
     images = {}
     with open(path, 'r') as f:
         lines = f.readlines()
-
+    
     # First collect all images
     for i in range(0, len(lines), 2):
         line = lines[i]
@@ -57,21 +56,20 @@ def read_images_text(path):
         tvec = np.array([float(x) for x in data[5:8]])
         camera_id = int(data[8])
         name = data[9]
-
+        
         R = qvec2rotmat(qvec)
-
+        
         images[image_id] = {
             'R': R,
-            't': tvec.reshape(3, 1),
+            't': tvec.reshape(3,1),
             'camera_id': camera_id,
             'name': name
         }
-
+    
     # Sort images by name and create new ordered dictionary
     sorted_images = dict(natsorted(images.items(), key=lambda x: x[1]['name']))
-
+    
     return sorted_images
-
 
 def read_cameras_text(path):
     """Read cameras.txt file"""
@@ -94,7 +92,6 @@ def read_cameras_text(path):
             }
     return cameras
 
-
 def get_intrinsic_matrix(camera, downsample_factor=1):
     """Get intrinsic matrix from camera parameters"""
     if camera['model'] == 'PINHOLE':
@@ -107,8 +104,7 @@ def get_intrinsic_matrix(camera, downsample_factor=1):
     else:
         raise ValueError(f"Camera model {camera['model']} not supported yet")
 
-
-def sample_farthest_points(points: torch.Tensor, K: int) -> torch.Tensor:
+def sample_farthest_points_(points: torch.Tensor, K: int) -> torch.Tensor:
     """
     Sample K points from a point cloud using farthest point sampling.
 
@@ -125,7 +121,7 @@ def sample_farthest_points(points: torch.Tensor, K: int) -> torch.Tensor:
 
     # Initialize the first point randomly
     indices = torch.zeros((B, K), dtype=torch.long, device=device)
-    distances = torch.ones((B, N), device=device) * float('inf')
+    distances = torch.ones((B, N), device=device) * 1e8
 
     # Randomly select the first point
     indices[:, 0] = torch.randint(0, N, (B,), device=device)
@@ -170,8 +166,10 @@ class ColmapDataset(Dataset):
         self.points3D_rgb = torch.as_tensor(np.array([p['rgb'] for p in points3D.values()])).float()
 
         # Sample 3D points to a specific number
+        print(self.points3D_xyz.shape)
         if maximum_pts_num > 0 and len(self.points3D_xyz) > maximum_pts_num:
             sampled_points, indices = sample_farthest_points(self.points3D_xyz.unsqueeze(0), K=maximum_pts_num)
+            print(sampled_points.shape)
             self.points3D_xyz = sampled_points.squeeze(0)
             self.points3D_rgb = self.points3D_rgb[indices.squeeze(0)]
 

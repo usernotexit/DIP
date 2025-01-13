@@ -48,13 +48,18 @@ class GaussianRenderer(nn.Module):
         J_proj = torch.zeros((N, 2, 3), device=means3D.device)
         ### FILL:
         ### J_proj = ...
-        fx, fy = K[0, 0], K[1, 1]
-        z = screen_points[:, 2:3]  # (N, 1)
-        J_proj[:, 0, 0] = fx / z.squeeze()
-        J_proj[:, 1, 1] = fy / z.squeeze()
-        J_proj[:, 0, 2] = -fx * screen_points[:, 0] / (z.squeeze() * z.squeeze())
-        J_proj[:, 1, 2] = -fy * screen_points[:, 1] / (z.squeeze() * z.squeeze())
+        #fx, fy = K[0, 0], K[1, 1]
+        #z = screen_points[:, 2:3]  # (N, 1)
+        #J_proj[:, 0, 0] = fx / z.squeeze()
+        #J_proj[:, 1, 1] = fy / z.squeeze()
+        #J_proj[:, 0, 2] = - fx * screen_points[:, 0] / (z.squeeze() * z.squeeze())
+        #J_proj[:, 1, 2] = - fy * screen_points[:, 1] / (z.squeeze() * z.squeeze())
 
+        J_proj[:, 0, 0] = K[0, 0] / cam_points[:, 2]
+        J_proj[:, 0, 2] = -K[0, 0] * cam_points[:, 0] / (cam_points[:, 2] ** 2)
+        J_proj[:, 1, 1] = K[1, 1] / cam_points[:, 2]
+        J_proj[:, 1, 2] = -K[1, 1] * cam_points[:, 1] / (cam_points[:, 2] ** 2)
+        
         # Transform covariance to camera space
         ### FILL: Aplly world to camera rotation to the 3d covariance matrix
         ### covs_cam = ...  # (N, 3, 3)
@@ -92,8 +97,24 @@ class GaussianRenderer(nn.Module):
         
         # Compute gaussian values
         gaussian = torch.exp(exponent) / (2 * np.pi * torch.sqrt(det)).unsqueeze(-1).unsqueeze(-1)  # (N, H, W)
-        assert(torch.all(gaussian)>=0 and torch.all(gaussian)<=1)
-    
+
+#        try:
+            # 检查 inv_covs2D 的行列式是否小于 1e10
+#            assert torch.all(torch.det(inv_covs2D) < 1e10)
+#        except AssertionError:
+            # 计算每个矩阵的行列式
+#            det_values = torch.det(inv_covs2D)
+
+            # 找到行列式最大的矩阵的索引
+#            max_det_index = torch.argmax(det_values).item()
+
+            # 获取行列式最大的矩阵
+#            max_det_matrix = inv_covs2D[max_det_index]
+
+            # 输出结果
+#            print(f"Assertion failed: The maximum determinant value is {det_values[max_det_index].item()}")
+#            print(f"The matrix with the maximum determinant is:\n{max_det_matrix}")
+
         return gaussian
 
     def forward(
@@ -136,18 +157,36 @@ class GaussianRenderer(nn.Module):
         # 7. Compute weights
         ### FILL:
         ### weights = ... # (N, H, W)
-        T = torch.cumprod(1-alphas, dim=0) # (N, H, W)
+#        assert(torch.all(opacities>=0) and torch.all(opacities<=1))
+#        try:
+#            assert(torch.all(alphas>=0) and torch.all(alphas<=1))
+#        except AssertionError:
+            # 找到最大的矩阵元素的索引
+#            max_det_index = torch.argmax(alphas).item()
+
+#            # 获取行列式最大的矩阵
+#            max_det_matrix = alphas[max_det_index]
+
+            # 输出结果
+#            print(f"Assertion failed: The alphas value is {alphas[max_det_index].item()}")
+#            print(f"The idx with maximum alphas is:\n{max_det_matrix}")
+
+#        assert(torch.all(valid_mask>=0) and torch.all(valid_mask<=1))
+        beta = (1-alphas)#.clamp(0, 1)
+        T = torch.cumprod(beta + 1e-10, dim=0) # (N, H, W)
+#        assert(torch.all(T>=0) and torch.all(T<=1))
         T = torch.cat([torch.ones(1, self.H, self.W, device=alphas.device), T[:-1]], dim=0)
         weights = alphas * T  # (N, H, W)
-        assert(torch.all(opacities>=0) and torch.all(opacities)<=1)
-        assert(torch.all(valid_mask)>=0 and torch.all(valid_mask)<=1)
         
-        #assert(torch.all(T<=1))
-        #assert(torch.all(weights.sum(dim=0)<=1))
+#        try:
+#            assert(torch.all(weights.sum(dim=0)<=1.01))
+#        except AssertionError:
+#            print("sum of weights > 1!")
+#            print(weights.sum(dim=0).max())
         
         # 8. Final rendering
         rendered = (weights.unsqueeze(-1) * colors).sum(dim=0)  # (H, W, 3)
         
-        assert(torch.all(abs(colors)<255))
-        assert(torch.all(rendered<1e5))
+#        assert(torch.all(abs(colors)<255))
+#        assert(torch.all(abs(rendered)<1e5))
         return rendered

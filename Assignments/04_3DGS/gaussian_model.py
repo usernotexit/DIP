@@ -5,6 +5,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from typing import Dict, Tuple
 from dataclasses import dataclass
+from pytorch3d.ops.knn import knn_points
 
 
 @dataclass
@@ -17,7 +18,7 @@ class GaussianParameters:
     scales: torch.Tensor      # (N, 3) Log-space scales
 
 
-def knn_points(points1: torch.Tensor, points2: torch.Tensor, K: int) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+def knn_points_(points1: torch.Tensor, points2: torch.Tensor, K: int) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """
     Compute K nearest neighbors between two point clouds using PyTorch.
 
@@ -43,7 +44,6 @@ def knn_points(points1: torch.Tensor, points2: torch.Tensor, K: int) -> Tuple[to
     nn_points = points2[batch_indices, idx]  # (B, N, K, 3)
 
     return dists, idx, nn_points
-
 
 class GaussianModel(nn.Module):
     def __init__(self, points3D_xyz: torch.Tensor, points3D_rgb: torch.Tensor):
